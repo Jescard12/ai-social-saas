@@ -195,7 +195,7 @@ export default function BillingPage() {
         updatedAt: serverTimestamp(),
       });
 
-      alert("✅ Payment request submitted! We'll contact you shortly.");
+      alert("✅ Payment request submitted! We&apos;ll contact you shortly.");
       router.push(`/pending?paymentId=${paymentRef.id}`);
     } catch (err) {
       console.error("Payment submission error:", err);
@@ -301,7 +301,7 @@ export default function BillingPage() {
             <p className="font-bold text-lg mb-2">⚠️ IMPORTANT:</p>
             <p className="mb-2">You MUST contact us on WhatsApp before submitting your payment request.</p>
             <p className="font-semibold">📱 WhatsApp: +961 81 719 919</p>
-            <p className="text-xs mt-2">We'll guide you through the payment process and confirm your plan activation.</p>
+            <p className="text-xs mt-2">We&apos;ll guide you through the payment process and confirm your plan activation.</p>
           </div>
 
           <div className="grid gap-4">
