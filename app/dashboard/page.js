@@ -38,11 +38,10 @@ const CustomMarkdown = ({ children }) => {
     <div className="prose prose-invert max-w-none">
       <ReactMarkdown
         components={{
-          // Enhanced code block with copy functionality
           code: ({ node, inline, className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className || '');
             const codeContent = String(children).replace(/\n$/, '');
-            const index = Math.random(); // Simple unique key
+            const index = Math.random();
 
             if (!inline && match) {
               return (
@@ -55,11 +54,7 @@ const CustomMarkdown = ({ children }) => {
                       onClick={() => copyToClipboard(codeContent, index)}
                       className="flex items-center gap-2 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded-md transition-colors text-gray-300"
                     >
-                      {copiedCode === index ? (
-                        <>✅ Copied!</>
-                      ) : (
-                        <>📋 Copy</>
-                      )}
+                      {copiedCode === index ? "✅ Copied!" : "📋 Copy"}
                     </button>
                   </div>
                   <SyntaxHighlighter
@@ -95,109 +90,24 @@ const CustomMarkdown = ({ children }) => {
             );
           },
 
-          // Enhanced headers with gradients and icons
-          h1: ({ node, ...props }) => (
-            <h1 className="text-2xl font-bold mt-6 mb-4 pb-2 border-b border-gray-700 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400" {...props} />
-          ),
-          h2: ({ node, ...props }) => (
-            <h2 className="text-xl font-bold mt-5 mb-3 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-400" {...props} />
-          ),
-          h3: ({ node, ...props }) => (
-            <h3 className="text-lg font-semibold mt-4 mb-2 text-gray-300" {...props} />
-          ),
-
-          // Enhanced lists
-          ul: ({ node, ...props }) => (
-            <ul className="my-3 space-y-2 list-disc list-inside text-gray-300" {...props} />
-          ),
-          ol: ({ node, ...props }) => (
-            <ol className="my-3 space-y-2 list-decimal list-inside text-gray-300" {...props} />
-          ),
-          li: ({ node, ...props }) => (
-            <li className="pl-2 text-gray-300" {...props} />
-          ),
-
-          // Enhanced blockquotes
-          blockquote: ({ node, ...props }) => (
-            <blockquote className="border-l-4 border-blue-500 pl-4 my-4 italic bg-blue-900/20 py-2 rounded-r-lg text-gray-300" {...props} />
-          ),
-
-          // Enhanced tables
-          table: ({ node, ...props }) => (
-            <div className="overflow-x-auto my-4 rounded-lg border border-gray-700">
-              <table className="min-w-full divide-y divide-gray-700" {...props} />
-            </div>
-          ),
-          thead: ({ node, ...props }) => (
-            <thead className="bg-gray-800" {...props} />
-          ),
-          tbody: ({ node, ...props }) => (
-            <tbody className="divide-y divide-gray-700" {...props} />
-          ),
-          th: ({ node, ...props }) => (
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-700" {...props} />
-          ),
-          td: ({ node, ...props }) => (
-            <td className="px-4 py-3 text-sm text-gray-300 border-b border-gray-700" {...props} />
-          ),
-
-          // Enhanced paragraphs
+          // FIXED: p component
           p: ({ node, ...props }) => {
-            const hasImage = node.children?.some(child => 
+            const hasImage = node?.children?.some(child => 
               child.type === 'element' && child.tagName === 'img'
             );
             
             if (hasImage) {
-              return <>{props.children}</>;
+              return <div>{props.children}</div>;
             }
             
             return <p className="my-3 text-gray-300 leading-relaxed" {...props} />;
           },
 
-          // Enhanced links
-          a: ({ node, ...props }) => (
-            <a className="text-blue-400 hover:text-blue-300 underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+          // ... keep all your other components the same
+          h1: ({ node, ...props }) => (
+            <h1 className="text-2xl font-bold mt-6 mb-4 pb-2 border-b border-gray-700 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400" {...props} />
           ),
-
-          // Enhanced images
-          img: ({ node, ...props }) => {
-            if (!props.src || props.src === "") {
-              return null;
-            }
-            return (
-              <div className="text-center my-6 p-4 bg-gray-900/50 rounded-xl border border-gray-700">
-                <img
-                  {...props}
-                  className="max-w-full h-auto rounded-lg shadow-2xl mx-auto border-2 border-gray-600"
-                  alt={props.alt || "Generated content"}
-                  onError={(e) => {
-                    console.log("❌ Image failed to load");
-                    e.target.style.display = 'none';
-                  }}
-                  onLoad={() => console.log("✅ Image loaded successfully")}
-                />
-                <div className="text-sm text-gray-400 mt-3 flex items-center justify-center gap-2">
-                  <span className="bg-purple-900/30 px-2 py-1 rounded-md">✨</span>
-                  AI-generated marketing visual
-                </div>
-              </div>
-            );
-          },
-
-          // Enhanced horizontal rule
-          hr: ({ node, ...props }) => (
-            <hr className="my-6 border-gray-700" {...props} />
-          ),
-
-          // Enhanced strong/bold
-          strong: ({ node, ...props }) => (
-            <strong className="font-bold text-white" {...props} />
-          ),
-
-          // Enhanced emphasis/italic
-          em: ({ node, ...props }) => (
-            <em className="italic text-gray-300" {...props} />
-          ),
+          // ... rest of your components
         }}
       >
         {children}
