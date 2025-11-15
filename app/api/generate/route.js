@@ -1,34 +1,55 @@
-import { getAuth } from "firebase-admin/auth";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { auth, db } from "@/firebase";
+import { verifyIdToken } from "firebase/auth";
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  query, 
+  orderBy 
+} from "firebase/firestore";
 
-// ✅ Initialize Firebase Admin
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: "ai-social-saas-1de62",
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  });
-}
-
-const db = getFirestore();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ✅ POST handler
 export async function POST(request) {
   try {
-    // 1️⃣ Verify Firebase user
+    // 1️⃣ Verify Firebase user (using client SDK)
     const authHeader = request.headers.get("authorization");
     if (!authHeader)
       return NextResponse.json({ error: "Missing authorization header" }, { status: 401 });
 
     const token = authHeader.replace("Bearer ", "").trim();
-    const decoded = await getAuth().verifyIdToken(token);
-    const userId = decoded?.uid;
+    
+    // Verify token using Firebase client SDK
+    let userId;
+    try {
+      // For client SDK, we need to use the token directly in frontend
+      // Since this is server-side, we'll trust the token for now
+      // In production, you might want to use a different auth approach
+      const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ idToken: token }),
+      });
+      
+      const data = await response.json();
+      if (data.users && data.users[0]) {
+        userId = data.users[0].localId;
+      } else {
+        return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      }
+    } catch (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
+    }
+
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // 2️⃣ Parse JSON safely
@@ -48,10 +69,10 @@ export async function POST(request) {
     console.log(`💬 Prompt received: ${prompt} 📁 Chat: ${chatId}`);
 
     // 🔐 CHECK TRIAL MESSAGE LIMIT (Backend enforcement)
-    const userRef = db.collection("users").doc(userId);
-    const userDoc = await userRef.get();
+    const userRef = doc(db, "users", userId);
+    const userDoc = await getDoc(userRef);
     
-    if (userDoc.exists) {
+    if (userDoc.exists()) {
       const userData = userDoc.data();
       
       // Check if user is on trial
@@ -82,7 +103,7 @@ export async function POST(request) {
         }
         
         // Update counters
-        await userRef.update({
+        await updateDoc(userRef, {
           chatsToday: newChatsToday + 1,
           trialMessagesSent: trialMessagesSent + 1,
           lastChatDate: today,
@@ -94,17 +115,18 @@ export async function POST(request) {
     }
 
     // 3️⃣ Load chat memory
-    const messagesRef = db.collection(`chats/${chatId}/messages`);
-    const snap = await messagesRef.orderBy("createdAt", "asc").get();
+    const messagesRef = collection(db, `chats/${chatId}/messages`);
+    const q = query(messagesRef, orderBy("createdAt", "asc"));
+    const snap = await getDocs(q);
     const memory = snap.docs.map((d) => ({
       role: d.data().role,
       content: d.data().text || "",
     }));
 
     // 4️⃣ Fetch file content (if any)
-    const chatDoc = await db.collection("chats").doc(chatId).get();
-    let fileContent = chatDoc.exists ? chatDoc.data().fileContent : "";
-    let fileName = chatDoc.exists ? chatDoc.data().fileName : "";
+    const chatDoc = await getDoc(doc(db, "chats", chatId));
+    let fileContent = chatDoc.exists() ? chatDoc.data().fileContent : "";
+    let fileName = chatDoc.exists() ? chatDoc.data().fileName : "";
 
     if (fileContent) {
       console.log(`📄 Loaded file content from Firestore (${fileName || "unknown file"})`);
@@ -140,7 +162,7 @@ export async function POST(request) {
     const result = completion.choices[0]?.message?.content?.trim() || "No response generated.";
 
     // 7️⃣ Save AI reply
-    await db.collection(`chats/${chatId}/messages`).add({
+    await addDoc(collection(db, `chats/${chatId}/messages`), {
       role: "assistant",
       text: result,
       createdAt: new Date(),
