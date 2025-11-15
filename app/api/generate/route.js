@@ -14,6 +14,11 @@ import {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// 🔍 ADD THIS CHECK - Right after OpenAI initialization
+if (!process.env.OPENAI_API_KEY) {
+  console.error("❌ OPENAI_API_KEY is missing from environment variables");
+}
+
 // ✅ POST handler
 export async function POST(request) {
   try {
@@ -39,6 +44,21 @@ export async function POST(request) {
 
     if (!userId) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    // 🔍 ADD CONNECTION TESTS - Right here
+    console.log("🔍 Testing connections...");
+    
+    // Test OpenAI connection
+    try {
+      // Simple test - list models to verify API key
+      await openai.models.list();
+      console.log("✅ OpenAI API connection successful");
+    } catch (error) {
+      console.error("❌ OpenAI API connection failed:", error.message);
+      return NextResponse.json({ 
+        error: "OpenAI API configuration error: " + error.message 
+      }, { status: 500 });
     }
 
     // 2️⃣ Parse JSON safely
@@ -140,6 +160,8 @@ export async function POST(request) {
       { role: "user", content: userPrompt },
     ];
 
+    console.log("🤖 Sending request to OpenAI...");
+    
     // 6️⃣ Generate response
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -149,6 +171,7 @@ export async function POST(request) {
     });
 
     const result = completion.choices[0]?.message?.content?.trim() || "No response generated.";
+    console.log("✅ OpenAI response received successfully");
 
     // 7️⃣ Save AI reply
     await addDoc(collection(db, `chats/${chatId}/messages`), {
@@ -157,14 +180,27 @@ export async function POST(request) {
       createdAt: new Date(),
     });
 
+    console.log("💾 Response saved to Firestore");
+
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     console.error("🔥 /api/generate error:", error);
-    console.error("🔥 Error details:", {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
+    
+    // More detailed error logging
+    if (error.response) {
+      console.error("🔥 OpenAI API Response Error:", {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+    } else if (error.request) {
+      console.error("🔥 No response received from OpenAI:", error.request);
+    } else {
+      console.error("🔥 Error setting up request:", error.message);
+    }
+    
+    console.error("🔥 Error stack:", error.stack);
+
     return NextResponse.json({ 
       error: "Internal Server Error. Please try again.",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
