@@ -1,0 +1,154 @@
+import { getAuth } from "firebase-admin/auth";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+
+// ✅ Initialize Firebase Admin
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: "ai-social-saas-1de62",
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  });
+}
+
+const db = getFirestore();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ✅ POST handler
+export async function POST(request) {
+  try {
+    // 1️⃣ Verify Firebase user
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader)
+      return NextResponse.json({ error: "Missing authorization header" }, { status: 401 });
+
+    const token = authHeader.replace("Bearer ", "").trim();
+    const decoded = await getAuth().verifyIdToken(token);
+    const userId = decoded?.uid;
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // 2️⃣ Parse JSON safely
+    let bodyText = await request.text();
+    let body = {};
+    try {
+      body = JSON.parse(bodyText);
+    } catch (err) {
+      console.error("⚠️ Invalid JSON:", err);
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const { prompt, chatId } = body;
+    if (!prompt || !chatId)
+      return NextResponse.json({ error: "Missing prompt or chatId" }, { status: 400 });
+
+    console.log(`💬 Prompt received: ${prompt} 📁 Chat: ${chatId}`);
+
+    // 🔐 CHECK TRIAL MESSAGE LIMIT (Backend enforcement)
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+    
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      
+      // Check if user is on trial
+      if (userData.status === "trial") {
+        const today = new Date().toISOString().split("T")[0];
+        const chatsToday = userData.chatsToday || 0;
+        const lastChatDate = userData.lastChatDate || "";
+        const trialMessagesSent = userData.trialMessagesSent || 0;
+        
+        // Reset counter if new day
+        let newChatsToday = chatsToday;
+        if (lastChatDate !== today) {
+          newChatsToday = 0;
+        }
+        
+        // Check daily limit (10 messages)
+        if (newChatsToday >= 10) {
+          return NextResponse.json({ 
+            error: "🚫 Daily Message Limit Reached\n\nYou've used all 10 messages for today. This limit resets at midnight.\n\n💡 Upgrade to our paid plan for unlimited messages and advanced features!" 
+          }, { status: 429 });
+        }
+        
+        // Check total trial limit (30 messages over 3 days)
+        if (trialMessagesSent >= 30) {
+          return NextResponse.json({ 
+            error: "🎯 Trial Period Completed\n\nYou've used all 30 messages included in your free trial.\n\n🚀 Upgrade now to continue using BuzAI with:\n• Unlimited messages\n• Priority support\n• Advanced features\n• No restrictions" 
+          }, { status: 429 });
+        }
+        
+        // Update counters
+        await userRef.update({
+          chatsToday: newChatsToday + 1,
+          trialMessagesSent: trialMessagesSent + 1,
+          lastChatDate: today,
+          updatedAt: new Date()
+        });
+        
+        console.log(`📊 Trial user usage: ${newChatsToday + 1}/10 today, ${trialMessagesSent + 1}/30 total`);
+      }
+    }
+
+    // 3️⃣ Load chat memory
+    const messagesRef = db.collection(`chats/${chatId}/messages`);
+    const snap = await messagesRef.orderBy("createdAt", "asc").get();
+    const memory = snap.docs.map((d) => ({
+      role: d.data().role,
+      content: d.data().text || "",
+    }));
+
+    // 4️⃣ Fetch file content (if any)
+    const chatDoc = await db.collection("chats").doc(chatId).get();
+    let fileContent = chatDoc.exists ? chatDoc.data().fileContent : "";
+    let fileName = chatDoc.exists ? chatDoc.data().fileName : "";
+
+    if (fileContent) {
+      console.log(`📄 Loaded file content from Firestore (${fileName || "unknown file"})`);
+    }
+
+    // 5️⃣ Build messages for AI
+    const systemMessage = {
+      role: "system",
+      content:
+        "You are Buz AI, a professional business strategist and marketing assistant. " +
+        "You help entrepreneurs plan, analyze, and build ideas clearly. " +
+        "If the user uploaded a file, use its content for context. Be precise, insightful, and strategic.",
+    };
+
+    const userPrompt = fileContent
+      ? `User prompt: "${prompt}"\n\n📄 File content:\n${fileContent.slice(0, 5000)}`
+      : prompt;
+
+    const messagesForAI = [
+      systemMessage,
+      ...memory.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content: userPrompt },
+    ];
+
+    // 6️⃣ Generate response
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: messagesForAI,
+      temperature: 0.8,
+      max_tokens: 2000,
+    });
+
+    const result = completion.choices[0]?.message?.content?.trim() || "No response generated.";
+
+    // 7️⃣ Save AI reply
+    await db.collection(`chats/${chatId}/messages`).add({
+      role: "assistant",
+      text: result,
+      createdAt: new Date(),
+    });
+
+    return NextResponse.json({ ok: true, result });
+  } catch (error) {
+    console.error("🔥 /api/generate error:", error);
+    return NextResponse.json({ error: "Internal Server Error. Please try again." }, { status: 500 });
+  }
+}
