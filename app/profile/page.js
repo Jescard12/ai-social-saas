@@ -1,52 +1,35 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { auth, db } from "@/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { auth, db } from '@/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import Swal from 'sweetalert2';
 
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [chatCount, setChatCount] = useState(0);
-  const [planData, setPlanData] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
-        router.push("/");
+        router.push('/');
         return;
       }
-
       setUser(currentUser);
-      setAuthLoading(false);
-
+      
       try {
-        // Fetch number of chats
-        const q = query(collection(db, "chats"), where("userId", "==", currentUser.uid));
-        const querySnapshot = await getDocs(q);
-        setChatCount(querySnapshot.size);
-
-        // Fetch user plan
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
-
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
-          const data = userDoc.data();
-
-          // Auto-correct if approved but plan not updated
-          if (data.status === "approved" && data.requestedPlan && !data.plan) {
-            data.plan = data.requestedPlan;
-          }
-
-          setPlanData(data);
-        } else {
-          console.warn("User document not found.");
+          setUserData(userDoc.data());
         }
-      } catch (err) {
-        console.error("Error fetching profile data:", err);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setLoading(false);
       }
     });
 
@@ -56,107 +39,70 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      router.push("/");
-    } catch (err) {
-      console.error("Logout error:", err);
+      router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
     }
   };
 
-  const goBackToDashboard = () => {
-    router.push("/dashboard");
+  const handleUpgrade = () => {
+    router.push('/billing');
   };
 
-  if (authLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#0a0f1f] via-[#1a1f3b] to-[#2a0f3f] text-white">
-        <p className="text-lg animate-pulse">Loading your profile...</p>
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0f1f] via-[#1a1f3b] to-[#2a0f3f] flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
 
-  if (!user) return null;
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-[#0a0f1f] via-[#1a1f3b] to-[#2a0f3f] p-6">
-      <div className="bg-gradient-to-br from-indigo-900/30 to-blue-900/20 backdrop-blur-lg rounded-2xl shadow-xl p-8 w-full max-w-md text-center text-white border border-indigo-500/20">
-        {/* Avatar */}
-        <div className="flex justify-center mb-5">
-          <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-full flex items-center justify-center text-4xl font-bold shadow-lg">
-            {user?.email ? user.email.charAt(0).toUpperCase() : "?"}
-          </div>
-        </div>
-
-        <h1 className="text-2xl font-extrabold mb-4">Your Profile</h1>
-
-        <div className="space-y-2 text-white/90 mb-6">
-          <p>
-            <strong>Email:</strong> {user.email || "N/A"}
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1f] via-[#1a1f3b] to-[#2a0f3f] text-white p-8">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8 text-center">Profile</h1>
+        
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-2xl mb-6">
+          <h2 className="text-xl font-semibold mb-4">Account Information</h2>
           
-          <p>
-            <strong>Total Chats:</strong> {chatCount}
-          </p>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-300">Email:</span>
+              <span className="font-semibold">{user?.email}</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-300">Plan:</span>
+              <span className={`font-semibold ${
+                userData?.status === 'approved' ? 'text-green-400' : 
+                userData?.status === 'trial' ? 'text-blue-400' : 'text-yellow-400'
+              }`}>
+                {userData?.status?.toUpperCase() || 'Loading...'}
+              </span>
+            </div>
+            
+            {userData?.trialEnd && (
+              <div className="flex justify-between">
+                <span className="text-gray-300">Trial Ends:</span>
+                <span className="font-semibold">
+                  {new Date(userData.trialEnd?.toDate?.() || userData.trialEnd).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Subscription Info - DIFFERENT BACKGROUND COLOR */}
-        {planData ? (
-          <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/30 p-5 rounded-xl mb-6 text-left space-y-2 border border-purple-500/20 backdrop-blur-md">
-            <p className="flex justify-between">
-              <strong>Plan:</strong> 
-              <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                {planData.plan || "N/A"}
-              </span>
-            </p>
-            <p className="flex justify-between">
-              <strong>Status:</strong> 
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                planData.status === "approved" 
-                  ? "bg-green-500/20 text-green-300 border border-green-500/30" 
-                  : planData.status === "trial"
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                  : "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
-              }`}>
-                {planData.status || "N/A"}
-              </span>
-            </p>
-            <p>
-              <strong>Start Date:</strong>{" "}
-              {planData.startDate
-                ? new Date(
-                    planData.startDate.seconds
-                      ? planData.startDate.seconds * 1000
-                      : planData.startDate
-                  ).toLocaleDateString()
-                : "N/A"}
-            </p>
-            <p>
-              <strong>End Date:</strong>{" "}
-              {planData.endDate
-                ? new Date(
-                    planData.endDate.seconds
-                      ? planData.endDate.seconds * 1000
-                      : planData.endDate
-                  ).toLocaleDateString()
-                : "N/A"}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-gradient-to-br from-red-900/30 to-orange-900/20 p-5 rounded-xl mb-6 text-center border border-red-500/20 backdrop-blur-md">
-            <p className="text-red-300 font-semibold">⚠️ No active plan found</p>
-          </div>
-        )}
-
-        {/* Buttons */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <button
-            onClick={goBackToDashboard}
-            className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 px-5 py-2.5 rounded-full font-semibold transition shadow-lg transform hover:scale-105 duration-200"
+            onClick={handleUpgrade}
+            className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-400 hover:to-teal-400 py-3 rounded-full font-semibold transition shadow-lg"
           >
-            Back to Dashboard
+            Upgrade Plan
           </button>
+          
           <button
             onClick={handleLogout}
-            className="bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 px-5 py-2.5 rounded-full font-semibold transition shadow-lg transform hover:scale-105 duration-200"
+            className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 py-3 rounded-full font-semibold transition shadow-lg"
           >
             Logout
           </button>
