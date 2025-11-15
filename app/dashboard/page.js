@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 //import firebaseApp, { auth, db } from "@/firebase";
+import { auth } from '@/firebase';
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection,
