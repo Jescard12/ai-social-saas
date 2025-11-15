@@ -160,6 +160,14 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     console.error("🔥 /api/generate error:", error);
-    return NextResponse.json({ error: "Internal Server Error. Please try again." }, { status: 500 });
+    console.error("🔥 Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return NextResponse.json({ 
+      error: "Internal Server Error. Please try again.",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }
