@@ -23,7 +23,7 @@ export default function LandingPage() {
           <a href="#faq" className="hover:text-indigo-400">FAQ</a>
         </nav>
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/auth")}
           className="px-5 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 transition font-semibold"
         >
           Get Started
@@ -41,7 +41,7 @@ export default function LandingPage() {
         <div className="flex gap-4 mt-8">
           {/* Sign In button styled like previous Try Free */}
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/auth")}
             className="px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 transition font-semibold"
           >
             Try Now For Free
@@ -163,7 +163,7 @@ export default function LandingPage() {
       <div className="bg-indigo-600 text-white text-center py-6 rounded-t-lg mt-12">
         <p className="font-semibold">Ready to upgrade your business in just $5?</p>
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/auth")}
           className="inline-block mt-2 px-6 py-3 bg-white text-indigo-600 rounded-full font-semibold hover:opacity-90 transition"
         >
           Start Now

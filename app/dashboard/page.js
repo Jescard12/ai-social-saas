@@ -269,7 +269,7 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
-        router.push("/");
+        router.push("/auth");
         return;
       }
       setUser(currentUser);
@@ -2758,7 +2758,7 @@ export default function Dashboard() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      router.push("/");
+      router.push("/auth");
     } catch (err) {
       console.error("Logout error:", err);
     }
